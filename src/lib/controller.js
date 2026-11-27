@@ -166,22 +166,111 @@ export class SkyController {
     this.refreshUi()
   }
 
+  /*
+   * 定位：支付宝/微信的 getLocation 在「后台未开通权限」或「曾拒绝过」时
+   * 直接返回 fail 且不弹任何系统授权框。因此必须先查授权态再分类处理，
+   * 失败时弹自建引导层，并把「手动选城市」作为一等公民，而不是一句 toast 切北京。
+   */
   requestGeo (silent = false) {
-    uni.getLocation({
-      type: 'gcj02',
-      success: (res) => {
+    const proceed = () => this.doGetLocation(silent)
+    try {
+      uni.getSetting({
+        success: (res) => {
+          const auth = (res && res.authSetting) || {}
+          const state = auth['scope.userLocation']
+          if (state === false) {
+            // 已明确拒绝：再次调用不会弹窗，只能引导用户去设置
+            if (silent) this.useCity(CITIES[0].name)
+            else this.showLocGuide('denied')
+            return
+          }
+          proceed()
+        },
+        fail: proceed
+      })
+    } catch (e) { proceed() }
+  }
+
+  doGetLocation (silent = false) {
+    const onOk = (res) => {
+      if (res && typeof res.latitude === 'number' && typeof res.longitude === 'number') {
         Astro.setLocation(res.latitude, res.longitude, '当前位置')
         this.locationSet = true
+        this.hideLocGuide()
         this.refreshUi()
-        if (!silent) this.toast('已使用当前位置：' + res.latitude.toFixed(2) + '°, ' + res.longitude.toFixed(2) + '°')
-      },
-      fail: () => {
-        if (!silent) {
-          this.useCity(CITIES[0].name)
-          this.toast('定位被拒绝，已切换到北京')
-        }
+        if (!silent) this.toast('已定位：' + res.latitude.toFixed(2) + '°N ' + res.longitude.toFixed(2) + '°E')
+      } else {
+        this.showLocGuide('unsupported')
       }
-    })
+    }
+    const onFail = (err) => {
+      const msg = String((err && (err.errMsg || err.message || err.msg)) || '')
+      this.lastGeoError = msg
+      if (silent) this.useCity(CITIES[0].name)
+      else this.showLocGuide(this.classifyGeoError(msg))
+    }
+    try {
+      uni.getLocation({
+        type: 'gcj02',
+        // #ifndef MP-ALIPAY
+        isHighAccuracy: true,
+        highAccuracyExpireTime: 4000,
+        // #endif
+        success: onOk,
+        fail: onFail
+      })
+    } catch (e) {
+      this.showLocGuide('unsupported')
+    }
+  }
+
+  // 把平台各不相同的报错文案归成三类，便于给出准确的引导
+  classifyGeoError (msg) {
+    const m = String(msg || '').toLowerCase()
+    if (m.indexOf('deny') >= 0 || m.indexOf('auth') >= 0 || m.indexOf('permission') >= 0 || m.indexOf('拒绝') >= 0) return 'denied'
+    if (m.indexOf('未开启') >= 0 || m.indexOf('关闭') >= 0 || m.indexOf('unavailable') >= 0 || m.indexOf('system') >= 0 || m.indexOf('fail ') >= 0) return 'service'
+    return 'unsupported'
+  }
+
+  showLocGuide (kind) {
+    const MAP = {
+      denied: {
+        title: '定位权限被关闭了',
+        desc: '可以到系统设置里重新打开定位权限，也可以先手动选一个城市 —— 星图一样会准确对齐。'
+      },
+      service: {
+        title: '手机的定位服务没开',
+        desc: '请打开系统定位开关后重试，或者先手动选一个城市继续观星。'
+      },
+      unsupported: {
+        title: '没能拿到你的位置',
+        desc: '可能是定位权限尚未开启，或室内信号太弱。先手动选一个城市，同样能对齐真实星空。'
+      }
+    }
+    const m = MAP[kind] || MAP.unsupported
+    this.ui.locGuide = { show: true, kind: kind, title: m.title, desc: m.desc }
+    this.ui.locWarn = true
+  }
+
+  hideLocGuide () { this.ui.locGuide.show = false }
+
+  openLocSetting () {
+    // #ifdef MP-ALIPAY
+    // 支付宝没有统一 openSetting，官方引导入口是 showAuthGuide
+    if (typeof my !== 'undefined' && my.showAuthGuide) {
+      my.showAuthGuide({ bizType: 'getLocation' })
+      this.toast('打开「位置信息」后回来重试')
+    } else {
+      this.toast('请到「支付宝 - 我的 - 设置 - 隐私」里开启位置信息')
+    }
+    // #endif
+    // #ifndef MP-ALIPAY
+    try {
+      uni.openSetting({})
+    } catch (e) {
+      this.toast('请到系统设置里为小程序开启定位权限')
+    }
+    // #endif
   }
 
   /* ---------------- 主循环 ---------------- */

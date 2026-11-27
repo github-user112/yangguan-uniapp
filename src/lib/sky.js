@@ -275,9 +275,9 @@ var D2R = Math.PI / 180;
     var dir = groundBelow ? 1 : -1;
     var span = Math.max(60, h * 0.9);
     var g = ctx.createLinearGradient(midX, midY, midX, midY + dir * span);
-    g.addColorStop(0, 'rgba(10,16,28,0.86)');
-    g.addColorStop(0.35, 'rgba(6,9,17,0.95)');
-    g.addColorStop(1, 'rgba(2,3,8,1)');
+    g.addColorStop(0, 'rgba(17,28,48,0.92)');
+    g.addColorStop(0.3, 'rgba(11,18,32,0.96)');
+    g.addColorStop(1, 'rgba(3,5,11,1)');
     ctx.fillStyle = g;
     ctx.fill();
     ctx.restore();
@@ -601,6 +601,17 @@ var D2R = Math.PI / 180;
     var ctx = this.ctx, w = this.w, h = this.h;
     var y0 = this.horizonLineY(0), y1 = this.horizonLineY(w);
     if (y0 == null) return;
+
+    // 地平线以下保留一层极淡的地气辉光，避免整片死黑
+    var hy = (y0 + y1) / 2;
+    var down = this.basis.u[1] > 0 ? 1 : -1;
+    var spanPx = Math.min(140, Math.max(70, h * 0.18));
+    var glow = ctx.createLinearGradient(0, down > 0 ? hy : hy - spanPx, 0, down > 0 ? hy + spanPx : hy);
+    glow.addColorStop(down > 0 ? 0 : 1, 'rgba(96,158,214,0.13)');
+    glow.addColorStop(down > 0 ? 0.55 : 0.45, 'rgba(96,158,214,0.04)');
+    glow.addColorStop(down > 0 ? 1 : 0, 'rgba(96,158,214,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, down > 0 ? hy : hy - spanPx, w, spanPx);
 
     var g = ctx.createLinearGradient(0, y0, w, y1);
     g.addColorStop(0, 'rgba(110,190,240,0.05)');
