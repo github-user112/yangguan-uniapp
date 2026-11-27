@@ -1,0 +1,37 @@
+{
+    "name" : "仰观·实时星图",
+    "appid" : "",
+    "description" : "举起手机，看见头顶真实的星空",
+    "versionName" : "1.0.0",
+    "versionCode" : "100",
+    "transformPx" : false,
+    "mp-alipay" : {
+        "appid" : "2021007124619500",
+        "usingComponents" : true,
+        "permission" : {
+            "scope.userLocation" : {
+                "desc" : "用于按你所在的位置计算真实的星空"
+            }
+        }
+    },
+    "mp-weixin" : {
+        "appid" : "",
+        "usingComponents" : true,
+        "permission" : {
+            "scope.userLocation" : {
+                "desc" : "用于按你所在的位置计算真实的星空"
+            }
+        },
+        "requiredPrivateInfos" : [ "getLocation" ]
+    },
+    "h5" : {
+        "title" : "仰观 · 实时星图",
+        "router" : {
+            "mode" : "hash"
+        }
+    },
+    "uniStatistics" : {
+        "enable" : false
+    },
+    "vueVersion" : "3"
+}
