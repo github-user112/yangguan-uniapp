@@ -1,5 +1,9 @@
 # 仰观 · 实时星图（uni-app / Vue3 版）
 
+**在线体验：https://github-user112.github.io/yangguan-uniapp/**
+
+> 手机浏览器打开即可（需 https，传感器才可用）。电脑端可拖动屏幕环顾四周、双指/滚轮缩放。
+
 由 `yangguan-uniappx`（uni-app x）迁移而来。迁移原因：uni-app x 的 UTS 编译器在当前 Windows 环境下无法产出产物
 （`[uts] Failed to convert napi value into rust type bool`），而 uni-app（Vue3）的纯 CLI 链路可完整跑通，
 从编译、真机预览到上传全部可脚本化。
