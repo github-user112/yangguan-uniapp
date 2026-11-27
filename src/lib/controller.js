@@ -180,7 +180,7 @@ export class SkyController {
           const state = auth['scope.userLocation']
           if (state === false) {
             // 已明确拒绝：再次调用不会弹窗，只能引导用户去设置
-            if (silent) this.useCity(CITIES[0].name)
+            if (silent) { if (!this.locationSet) this.useCity(CITIES[0].name) }
             else this.showLocGuide('denied')
             return
           }
@@ -204,10 +204,16 @@ export class SkyController {
       }
     }
     const onFail = (err) => {
-      const msg = String((err && (err.errMsg || err.message || err.msg)) || '')
-      this.lastGeoError = msg
-      if (silent) this.useCity(CITIES[0].name)
-      else this.showLocGuide(this.classifyGeoError(msg))
+      // 各端字段不同：微信/uni 用 errMsg，支付宝 my.getLocation 用 errorMessage + error(码)
+      const msg = String(
+        (err && (err.errMsg || err.errorMessage || err.message || err.msg || err.error)) || ''
+      )
+      const code = err && (err.errCode !== undefined ? err.errCode : err.error)
+      this.lastGeoError = msg || ('code:' + code)
+      if (silent) { if (!this.locationSet) this.useCity(CITIES[0].name); return }
+      // 支付宝 12 = 用户已拒绝授权，此时再点重试不会弹窗，必须给「去设置」
+      if (String(code) === '12') { this.showLocGuide('denied'); return }
+      this.showLocGuide(this.classifyGeoError(msg))
     }
     try {
       uni.getLocation({
@@ -224,32 +230,46 @@ export class SkyController {
     }
   }
 
-  // 把平台各不相同的报错文案归成三类，便于给出准确的引导
+  // 把平台各不相同的报错文案归成三类，便于给出准确的引导。
+  // 注意：不能用「含 fail」这种宽泛规则兜到 service —— 各平台几乎所有失败都带 fail，
+  // 会把「用户拒绝」误判成「系统定位没开」，从而给出无效的「重新获取定位」按钮。
   classifyGeoError (msg) {
     const m = String(msg || '').toLowerCase()
-    if (m.indexOf('deny') >= 0 || m.indexOf('auth') >= 0 || m.indexOf('permission') >= 0 || m.indexOf('拒绝') >= 0) return 'denied'
-    if (m.indexOf('未开启') >= 0 || m.indexOf('关闭') >= 0 || m.indexOf('unavailable') >= 0 || m.indexOf('system') >= 0 || m.indexOf('fail ') >= 0) return 'service'
+    if (
+      m.indexOf('deny') >= 0 || m.indexOf('denied') >= 0 || m.indexOf('auth') >= 0 ||
+      m.indexOf('permission') >= 0 || m.indexOf('拒绝') >= 0 || m.indexOf('禁用') >= 0
+    ) return 'denied'
+    if (
+      m.indexOf('未开启') >= 0 || m.indexOf('关闭') >= 0 || m.indexOf('unavailable') >= 0 ||
+      m.indexOf('disabled') >= 0 || m.indexOf('location service') >= 0 || m.indexOf('系统定位') >= 0
+    ) return 'service'
     return 'unsupported'
   }
 
   showLocGuide (kind) {
     const MAP = {
+      // 已拒绝：系统不会再弹授权框，点「重试」只会静默失败 —— 只能引导去设置
       denied: {
-        title: '定位权限被关闭了',
-        desc: '可以到系统设置里重新打开定位权限，也可以先手动选一个城市 —— 星图一样会准确对齐。'
+        title: '没有定位权限',
+        desc: '支付宝不会再弹授权窗。可以到设置里打开位置权限，或先手动选个城市 —— 星图一样准。',
+        canRetry: false
       },
       service: {
         title: '手机的定位服务没开',
-        desc: '请打开系统定位开关后重试，或者先手动选一个城市继续观星。'
+        desc: '打开系统的定位总开关后可以再试一次，也可以先手动选个城市继续看星。',
+        canRetry: true
       },
       unsupported: {
-        title: '没能拿到你的位置',
-        desc: '可能是定位权限尚未开启，或室内信号太弱。先手动选一个城市，同样能对齐真实星空。'
+        title: '暂时没拿到位置',
+        desc: '可能是室内信号太弱或定位超时。可以再试一次，或先手动选个城市。',
+        canRetry: true
       }
     }
     const m = MAP[kind] || MAP.unsupported
-    this.ui.locGuide = { show: true, kind: kind, title: m.title, desc: m.desc }
+    this.ui.locGuide = { show: true, kind: kind, title: m.title, desc: m.desc, canRetry: m.canRetry }
     this.ui.locWarn = true
+    // 失败时画布其实照常按默认城市（北京）渲染，这里同步一次，避免顶栏停在「定位中」
+    if (this.renderer) this.refreshUi()
   }
 
   hideLocGuide () { this.ui.locGuide.show = false }

@@ -158,23 +158,23 @@
       </scroll-view>
     </view>
 
-    <!-- 定位授权引导层：失败不再是一句 toast，给三条出路 -->
-    <view v-if="ui.locGuide.show" class="mask strong" @click="onLocLater"></view>
-    <view v-if="ui.locGuide.show" class="guide-wrap">
-      <view class="guide" @click.stop>
-        <view class="guide-ico" :class="ui.locGuide.kind === 'denied' ? 'warn' : ''">
-          <text class="guide-ico-txt">◎</text>
+    <!-- 定位引导：浮动底部卡片，不加全屏遮罩，星空与其余 UI 始终可见可点 -->
+    <view v-if="ui.locGuide.show" class="loc-card" @click.stop>
+      <view class="loc-card-head">
+        <view class="loc-card-idx" :class="ui.locGuide.kind === 'denied' ? 'warn' : ''">
+          <text class="loc-card-idx-txt">◎</text>
         </view>
-        <text class="guide-title">{{ ui.locGuide.title }}</text>
-        <text class="guide-desc">{{ ui.locGuide.desc }}</text>
-        <button class="primary block" @click="onLocRetry"><text class="primary-txt">重新获取定位</text></button>
-        <button class="ghost block" @click="onLocManual"><text class="ghost-txt">手动选城市</text></button>
-        <view class="guide-foot">
-          <text class="link-txt" @click="onLocSetting">去系统设置</text>
-          <text class="link-dot">·</text>
-          <text class="link-txt" @click="onLocLater">以后再说</text>
-        </view>
+        <text class="loc-card-title">{{ ui.locGuide.title }}</text>
+        <button class="close" @click="onLocLater"><text class="close-x">×</text></button>
       </view>
+      <text class="loc-card-desc">{{ ui.locGuide.desc }}</text>
+      <button v-if="ui.locGuide.canRetry" class="primary block" @click="onLocRetry"><text class="primary-txt">重新获取定位</text></button>
+      <button v-else class="primary block" @click="onLocSetting"><text class="primary-txt">去开启定位权限</text></button>
+      <view class="btn-row">
+        <button class="ghost grow" @click="onLocManual"><text class="ghost-txt">手动选城市</text></button>
+        <button class="ghost grow" @click="onLocLater"><text class="ghost-txt">以后再说</text></button>
+      </view>
+      <text class="loc-card-tip">未定位时按北京 116°E 计算，星图依然准确</text>
     </view>
 
     <!-- 新手引导 -->
@@ -255,7 +255,7 @@
     trailSpeed: '15分/秒',
     birthMode: false,
     onboardShow: true,
-    locGuide: { show: false, kind: '', title: '', desc: '' }
+    locGuide: { show: false, kind: '', title: '', desc: '', canRetry: true }
   })
 
   const c = new SkyController(ui)
@@ -346,6 +346,12 @@
 
   onMounted(() => {
     setTimeout(fallbackCanvasInit, 700)
+    // 用户去系统设置开完定位回来后，自动静默重试一次（成功则收起卡片）
+    try {
+      uni.onAppShow(() => {
+        if (ui.locGuide.show) c.requestGeo(true)
+      })
+    } catch (e) {}
   })
 
   function onShareReady() {
@@ -831,48 +837,57 @@
     margin: 0 6px 6px 0;
   }
 
-  /* ---- 定位引导层 ---- */
-  .guide-wrap {
+  /* ---- 定位引导：浮动底部卡片（让出底部 chips，不遮星空） ---- */
+  .loc-card {
     position: fixed;
-    left: 0;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    justify-content: center;
-    align-items: center;
-    padding: 0 24px;
+    left: 12px;
+    right: 12px;
+    bottom: calc(72px + var(--uni-safe-area-inset-bottom, 0px));
+    padding: 14px 16px 12px;
+    background-color: rgba(11, 20, 36, 0.97);
+    border: 1px solid rgba(120, 170, 220, 0.3);
+    border-radius: 16px;
     z-index: 32;
   }
-  .guide {
-    width: 100%;
-    max-width: 340px;
-    padding: 18px 18px 14px;
-    background-color: #0b1424;
-    border: 1px solid rgba(120, 170, 220, 0.26);
-    border-radius: 18px;
+  .loc-card-head {
+    flex-direction: row;
+    align-items: center;
   }
-  .guide-ico {
-    width: 34px;
-    height: 34px;
+  .loc-card-idx {
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
     background-color: rgba(108, 201, 255, 0.12);
-    border: 1px solid rgba(108, 201, 255, 0.36);
+    border: 1px solid rgba(108, 201, 255, 0.34);
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
   }
-  .guide-ico.warn {
+  .loc-card-idx.warn {
     background-color: rgba(255, 202, 122, 0.12);
     border-color: rgba(255, 202, 122, 0.4);
   }
-  .guide-ico-txt { color: #6cc9ff; font-size: 14px; line-height: 1; }
-  .guide-ico.warn .guide-ico-txt { color: #ffca7a; }
-  .guide-title { color: #f2f7ff; font-size: 15px; font-weight: bold; margin-top: 12px; }
-  .guide-desc { color: #8fa6c0; font-size: 12px; line-height: 1.7; margin-top: 8px; }
-  .guide-foot {
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    margin-top: 14px;
+  .loc-card-idx-txt { color: #6cc9ff; font-size: 12px; line-height: 1; }
+  .loc-card-idx.warn .loc-card-idx-txt { color: #ffca7a; }
+  .loc-card-title {
+    color: #f2f7ff;
+    font-size: 15px;
+    font-weight: bold;
+    line-height: 1;
+    margin-left: 10px;
+    flex: 1;
+  }
+  .loc-card-desc {
+    color: #93a9c4;
+    font-size: 12px;
+    line-height: 1.65;
+    margin-top: 8px;
+  }
+  .loc-card-tip {
+    color: #5f7896;
+    font-size: 10px;
+    text-align: center;
+    margin-top: 10px;
   }
 
   /* ---- 新手引导 ---- */
